@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RoleAuthPage, Account } from '../components/role-auth'
+import { api } from '@/lib/api-client'
 import { ArrowDown, ArrowRight, ArrowUp, Baby, BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, ClipboardCheck, Clock3, Download, ExternalLink, Eye, EyeOff, FileQuestion, HeartPulse, HelpCircle, LayoutDashboard, LogIn, Menu, MoreHorizontal, Pencil, Plus, Search, Settings, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -50,15 +51,6 @@ function normalizeQuestion(raw: any, index: number = 0): Question {
   else if (qType === 'YES_NO') opts = ['Ya', 'Tidak']
   return { questionId: qId, questionText: qText, category: cat, questionType: qType, options: opts, required: req, active: act, order: ord, id: qId, title: qText, form: cat, type: qType, status: act ? 'active' : 'inactive', description: raw.description }
 }
-const initialArticles: Article[] = [
-  { id: 'K-001', title: 'Membangun rutinitas tidur yang sehat', category: 'Kesehatan', time: '5 min baca', color: 'mint', status: 'active', description: 'Rutinitas tidur yang konsisten membantu anak merasa tenang, nyaman, dan lebih mudah terlelap. Mulai dengan mandi air hangat, membacakan buku cerita, dan meredupkan lampu kamar 30 menit sebelum jam tidur untuk menciptakan suasana rileks.' },
-  { id: 'K-002', title: 'Ide aktivitas bermain untuk usia 3-5 tahun', category: 'Aktivitas', time: '7 min baca', color: 'peach', status: 'active', description: 'Aktivitas sensori dan motorik seperti bermain plastisin/playdough, menyusun balok kayu, dan mewarnai bersama dapat mengasah kreativitas, koordinasi mata-tangan, serta kemampuan fokus si Kecil.' },
-  { id: 'K-003', title: 'Mengenal tanda tumbuh kembang anak', category: 'Perkembangan', time: '6 min baca', color: 'lavender', status: 'active', description: 'Setiap anak bertumbuh dengan ritme uniknya masing-masing. Pantau tonggak capaian motorik kasar, motorik halus, bahasa/komunikasi, dan sosial-emosional secara berkala melalui tes KPSP dan catatan perkembangan mandiri.' },
-]
-const initialQuestions: Question[] = [
-  { questionId: 'Q-001', questionText: 'Seberapa sering anak membaca buku?', category: 'Pre-Test', questionType: 'MULTIPLE_CHOICE', options: ['Tidak pernah', 'Jarang', 'Kadang-kadang', 'Sering'], required: true, active: true, order: 1, id: 'Q-001', title: 'Seberapa sering anak membaca buku?', form: 'Pre-Test', type: 'MULTIPLE_CHOICE', status: 'active' },
-  { questionId: 'Q-002', questionText: 'Ceritakan kebiasaan anak yang ingin dipantau', category: 'Pre-Test', questionType: 'PARAGRAPH', options: [], required: false, active: true, order: 2, id: 'Q-002', title: 'Ceritakan kebiasaan anak yang ingin dipantau', form: 'Pre-Test', type: 'PARAGRAPH', status: 'active' },
-]
 
 function downloadArticle(a: Article) {
   if (typeof window === 'undefined') return
@@ -204,7 +196,7 @@ function exportRealData(accounts: Account[], children: Child[], responses: FormR
 
 function Logo({ dark = false }: { dark?: boolean }) { return <div className={`brand ${dark ? 'brand-dark' : ''}`}><span className="brand-mark"><HeartPulse size={17} /></span><span>TUMBUH <b>CERIA</b></span></div> }
 function Badge({ children, tone = 'green', style, className = '' }: { children: React.ReactNode; tone?: string; style?: React.CSSProperties; className?: string }) { return <span className={`badge badge-${tone} ${className}`} style={style}>{children}</span> }
-function Button({ children, variant = 'primary', onClick, className = '', type = 'button', disabled = false, style }: { children: React.ReactNode; variant?: string; onClick?: () => void; className?: string; type?: 'button' | 'submit'; disabled?: boolean; style?: React.CSSProperties }) { return <button type={type} className={`btn btn-${variant} ${className}`} onClick={onClick} disabled={disabled} style={style}>{children}</button> }
+function Button({ children, variant = 'primary', onClick, className = '', type = 'button', disabled = false, style, title }: { children: React.ReactNode; variant?: string; onClick?: () => void; className?: string; type?: 'button' | 'submit'; disabled?: boolean; style?: React.CSSProperties; title?: string }) { return <button type={type} className={`btn btn-${variant} ${className}`} onClick={onClick} disabled={disabled} style={style} title={title}>{children}</button> }
 function StatCard({ icon, label, value, note, tone = 'green' }: { icon: React.ReactNode; label: string; value: string; note: string; tone?: string }) { return <div className="stat-card"><div className={`stat-icon ${tone}`}>{icon}</div><div><div className="eyebrow">{label}</div><div className="stat-value">{value}</div><div className="stat-note">{note}</div></div></div> }
 
 function PublicHome({ onLogin, onRegister, onAdmin }: { onLogin: () => void; onRegister: () => void; onAdmin: () => void }) {
@@ -362,21 +354,32 @@ function ChildPage({ selected, setSelected, childrenData, setChildrenData, accou
   const [birth, setBirth] = useState('')
   const [gender, setGender] = useState('Perempuan')
   const colors = ['mint', 'peach', 'lavender', 'blue']
-  const save = () => {
+  const save = async () => {
     if (!name.trim()) return
-    if (editing) { setChildrenData(childrenData.map(c => c.id === editing.id ? { ...c, name, birth: birth || c.birth, gender } : c)) }
-    else {
-      const newId = `C-${Date.now()}`
-      setChildrenData([...childrenData, { id: newId, name, birth: birth || '', age: '', gender, status: 'Belum dipantau', initials: name.split(' ').map((x: string) => x[0]).join('').slice(0, 2).toUpperCase(), color: colors[childrenData.length % colors.length], pretest: false, parentId: accountId }])
+    try {
+      if (editing) {
+        const { child } = await api.updateChild(editing.id, { name, birth: birth || editing.birth, gender })
+        setChildrenData(childrenData.map(c => c.id === editing.id ? child : c))
+      } else {
+        const { child } = await api.createChild({ name, birth: birth || '', gender })
+        setChildrenData([...childrenData, child])
+      }
+      setName(''); setBirth(''); setGender('Perempuan'); setEditing(null); setShowForm(false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal menyimpan data anak.')
     }
-    setName(''); setBirth(''); setGender('Perempuan'); setEditing(null); setShowForm(false)
   }
-  const deleteChild = (id: string, nm: string) => {
+  const deleteChild = async (id: string, nm: string) => {
     if (confirm(`Hapus anak "${nm}"? Tidak dapat dibatalkan.`)) {
-      setChildrenData(childrenData.filter(c => c.id !== id))
-      if (setResponses && responses) setResponses(responses.filter(r => r.childId !== id))
-      if (selected === id) setSelected(childrenData.find(c => c.id !== id)?.id || '')
-      setMenu(null)
+      try {
+        await api.deleteChild(id)
+        setChildrenData(childrenData.filter(c => c.id !== id))
+        if (setResponses && responses) setResponses(responses.filter(r => r.childId !== id))
+        if (selected === id) setSelected(childrenData.find(c => c.id !== id)?.id || '')
+        setMenu(null)
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Gagal menghapus data anak.')
+      }
     }
   }
   return (
@@ -475,13 +478,18 @@ function PretestForm({ selected, setActive, childrenData, setChildrenData, quest
     const next = cur.includes(opt) ? cur.filter(o => o !== opt) : [...cur, opt]
     setAnswers(p => ({ ...p, [qId]: next.join(', ') })); setError('')
   }
-  const submit = () => {
+  const submit = async () => {
     const miss = activeQs.find(q => q.required && !(answers[q.questionId || q.id] || '').trim())
     if (miss) { setError(`Pertanyaan wajib belum dijawab: "${miss.questionText || miss.title}"`); return }
-    const dateStr = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-    setResponses([...responses, { id: `R-${Date.now()}`, formName: 'Pre-Test', childId: child.id, accountId, date: dateStr, answers }])
-    setChildrenData(childrenData.map(c => c.id === child.id ? { ...c, pretest: true } : c))
-    setSaved(true)
+    if (!child) return
+    try {
+      const result = await api.submitPretest({ childId: child.id, answers })
+      setResponses([...responses, result.response])
+      setChildrenData(childrenData.map(c => c.id === child.id ? result.child : c))
+      setSaved(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan jawaban.')
+    }
   }
   if (saved) return <div className="page-content centered-state"><div className="success-icon large"><Check size={36} /></div><span className="section-kicker">Data Tersimpan</span><h2>Pre-Test berhasil disimpan.</h2><p>Jawaban untuk <b>{child?.name}</b> tersimpan aman.</p><Button onClick={() => setActive('dashboard')}>Kembali ke Dashboard</Button></div>
   if (child?.pretest) return <div className="page-content centered-state"><div className="success-icon large"><Check size={36} /></div><span className="section-kicker">Sudah Selesai</span><h2>Pre-Test sudah dilakukan.</h2><p>Pre-Test untuk <b>{child?.name}</b> hanya satu kali.</p><Button onClick={() => setActive('dashboard')}>Kembali ke Dashboard</Button></div>
@@ -683,14 +691,35 @@ function AdminDashboard({ setActive, onExport, articles, setArticles, accounts, 
     reader.onload = () => { setFileData({ name: f.name, type: isVid ? 'Video' : 'Foto', data: reader.result as string }); setLoading(false) }
     reader.readAsDataURL(f)
   }
-  const publish = () => {
+  const publish = async () => {
     if (!fileData || !desc.trim()) return
-    if (articles && setArticles) setArticles([{ id: `K-${Date.now()}`, title: titleInput.trim() || fileData.name, category: 'Edukasi', time: 'Baru', color: 'mint', seen: false, description: desc, type: fileData.type, fileUrl: fileData.data, status: 'active' }, ...articles])
-    setNotice('Konten berhasil dipublikasikan.'); setDesc(''); setTitleInput(''); setFileData(null)
-    setTimeout(() => setNotice(''), 3000)
+    try {
+      const { article } = await api.createContent({ title: titleInput.trim() || fileData.name, category: 'Edukasi', time: 'Baru', color: 'mint', description: desc, type: fileData.type, fileUrl: fileData.data, status: 'active' })
+      if (articles && setArticles) setArticles([article, ...articles])
+      setNotice('Konten berhasil dipublikasikan.'); setDesc(''); setTitleInput(''); setFileData(null)
+      setTimeout(() => setNotice(''), 3000)
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Gagal mempublikasikan konten.')
+    }
   }
-  const saveK = () => { setExtConfig({ ...extConfig, kpsp: kDraft }); setEditK(false); setNotice('Konfigurasi KPSP disimpan.'); setTimeout(() => setNotice(''), 3000) }
-  const saveSt = () => { setExtConfig({ ...extConfig, screentime: stDraft }); setEditSt(false); setNotice('Konfigurasi Screen Time disimpan.'); setTimeout(() => setNotice(''), 3000) }
+  const saveK = async () => {
+    try {
+      const { extConfig: next } = await api.saveExtConfig({ ...extConfig, kpsp: kDraft })
+      setExtConfig(next)
+      setEditK(false); setNotice('Konfigurasi KPSP disimpan.'); setTimeout(() => setNotice(''), 3000)
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Gagal menyimpan konfigurasi.')
+    }
+  }
+  const saveSt = async () => {
+    try {
+      const { extConfig: next } = await api.saveExtConfig({ ...extConfig, screentime: stDraft })
+      setExtConfig(next)
+      setEditSt(false); setNotice('Konfigurasi Screen Time disimpan.'); setTimeout(() => setNotice(''), 3000)
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Gagal menyimpan konfigurasi.')
+    }
+  }
   return (
     <div className="page-content">
       <div className="welcome-row">
@@ -824,15 +853,24 @@ function QuestionsPage({ questions, setQuestions }: { questions: Question[]; set
     if (nt === 'MULTIPLE_CHOICE' || nt === 'CHECKBOX') { if (!options.length) setOptions(['Opsi 1', 'Opsi 2']) }
     else if (nt === 'YES_NO') setOptions(['Ya', 'Tidak'])
   }
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!qText.trim()) { setNotice('Teks pertanyaan wajib diisi.'); return }
     let finalOpts: string[] = []
     if (qType === 'MULTIPLE_CHOICE' || qType === 'CHECKBOX') { finalOpts = options.map(o => o.trim()).filter(Boolean); if (!finalOpts.length) { setNotice('Harus ada minimal 1 opsi.'); return } }
     else if (qType === 'YES_NO') finalOpts = ['Ya', 'Tidak']
     const fq: Question = { questionId: qId, questionText: qText.trim(), category: 'Pre-Test', questionType: qType, options: finalOpts, required, active, order: Number(order) || 1, id: qId, title: qText.trim(), form: 'Pre-Test', type: qType, status: active ? 'active' : 'inactive' }
-    if (isNew) setQuestions([...questions, fq])
-    else setQuestions(questions.map(q => q.questionId === fq.questionId ? fq : q))
-    setEditing(null); setNotice('Pertanyaan berhasil disimpan.'); setTimeout(() => setNotice(''), 3000)
+    try {
+      if (isNew) {
+        const { question } = await api.saveQuestion(fq)
+        setQuestions([...questions, question])
+      } else {
+        const { question } = await api.updateQuestion(fq.questionId, fq)
+        setQuestions(questions.map(q => q.questionId === fq.questionId ? question : q))
+      }
+      setEditing(null); setNotice('Pertanyaan berhasil disimpan.'); setTimeout(() => setNotice(''), 3000)
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Gagal menyimpan pertanyaan.')
+    }
   }
   return (
     <div className="page-content">
@@ -866,8 +904,23 @@ function QuestionsPage({ questions, setQuestions }: { questions: Question[]; set
               </div>
               <div className="form-actions" style={{ marginTop: 0, display: 'flex', gap: '6px' }}>
                 <Button variant="soft" onClick={() => handleEdit(q)}><Pencil size={14} /> Edit</Button>
-                <Button variant="ghost" onClick={() => setQuestions(questions.map(x => x.questionId === q.questionId ? { ...x, active: !q.active, status: !q.active ? 'active' : 'inactive' } : x))}>{q.active ? 'Nonaktifkan' : 'Aktifkan'}</Button>
-                <Button variant="ghost" style={{ color: '#bd714a' }} onClick={() => { if (confirm(`Hapus pertanyaan "${q.questionText}"?`)) setQuestions(questions.filter(x => x.questionId !== q.questionId)) }}><Trash2 size={14} /></Button>
+                <Button variant="ghost" onClick={async () => {
+                  try {
+                    const { question } = await api.updateQuestion(q.questionId, { active: !q.active, status: !q.active ? 'active' : 'inactive' })
+                    setQuestions(questions.map(x => x.questionId === q.questionId ? question : x))
+                  } catch (err) {
+                    setNotice(err instanceof Error ? err.message : 'Gagal mengubah status.')
+                  }
+                }}>{q.active ? 'Nonaktifkan' : 'Aktifkan'}</Button>
+                <Button variant="ghost" style={{ color: '#bd714a' }} onClick={async () => {
+                  if (!confirm(`Hapus pertanyaan "${q.questionText}"?`)) return
+                  try {
+                    await api.deleteQuestion(q.questionId)
+                    setQuestions(questions.filter(x => x.questionId !== q.questionId))
+                  } catch (err) {
+                    setNotice(err instanceof Error ? err.message : 'Gagal menghapus pertanyaan.')
+                  }
+                }}><Trash2 size={14} /></Button>
               </div>
             </div>
           ))}
@@ -883,17 +936,27 @@ function DataTable({ kind, onExport, accounts, setAccounts, childrenData, setChi
   const [message, setMessage] = useState('')
   const parents = (accounts || []).filter(a => a.role === 'parent')
   const children = childrenData || []
-  const delParent = (id: string, nm: string) => {
+  const delParent = async (id: string, nm: string) => {
     if (!confirm(`Hapus orang tua "${nm}" dan SEMUA data anaknya? Tidak dapat dibatalkan.`)) return
-    const parentChildIds = (children || []).filter(c => c.parentId === id).map(c => c.id)
-    if (setAccounts) setAccounts((accounts || []).filter(a => a.id !== id))
-    if (setChildrenData) setChildrenData(children.filter(c => c.parentId !== id))
-    if (setResponses && responses) setResponses(responses.filter(r => r.accountId !== id && !parentChildIds.includes(r.childId)))
+    try {
+      await api.deleteUser(id)
+      const parentChildIds = (children || []).filter(c => c.parentId === id).map(c => c.id)
+      if (setAccounts) setAccounts((accounts || []).filter(a => a.id !== id))
+      if (setChildrenData) setChildrenData(children.filter(c => c.parentId !== id))
+      if (setResponses && responses) setResponses(responses.filter(r => r.accountId !== id && !parentChildIds.includes(r.childId)))
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Gagal menghapus akun.')
+    }
   }
-  const delChild = (id: string, nm: string) => {
+  const delChild = async (id: string, nm: string) => {
     if (!confirm(`Hapus anak "${nm}"?`)) return
-    if (setChildrenData) setChildrenData(children.filter(c => c.id !== id))
-    if (setResponses && responses) setResponses(responses.filter(r => r.childId !== id))
+    try {
+      await api.deleteChild(id)
+      if (setChildrenData) setChildrenData(children.filter(c => c.id !== id))
+      if (setResponses && responses) setResponses(responses.filter(r => r.childId !== id))
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Gagal menghapus anak.')
+    }
   }
   const rows = kind === 'users'
     ? parents.map(a => ({ id: a.id, cols: [a.name, a.email, a.phone || '-', `${children.filter(c => c.parentId === a.id).length} anak`] }))
@@ -967,7 +1030,14 @@ function DataTable({ kind, onExport, accounts, setAccounts, childrenData, setChi
             </label>
             <div className="form-actions">
               <Button variant="ghost" onClick={() => setResetUser(null)}>Batal</Button>
-              <Button disabled={newPassword.length < 8} onClick={() => { if (setAccounts && accounts) setAccounts(accounts.map(a => a.id === resetUser ? { ...a, password: newPassword } : a)); setMessage('Password diperbarui.'); setNewPassword('') }}>
+              <Button disabled={newPassword.length < 8} onClick={async () => {
+                try {
+                  await api.resetUserPassword(resetUser, newPassword)
+                  setMessage('Password diperbarui.'); setNewPassword('')
+                } catch (err) {
+                  setMessage(err instanceof Error ? err.message : 'Gagal memperbarui password.')
+                }
+              }}>
                 Simpan password
               </Button>
             </div>
@@ -979,7 +1049,7 @@ function DataTable({ kind, onExport, accounts, setAccounts, childrenData, setChi
   )
 }
 
-function SettingsPage({ admin, account, onUpdateAccount }: { admin: boolean; account?: Account | null; onUpdateAccount?: (u: Account) => void }) {
+function SettingsPage({ admin, account, onUpdateAccount }: { admin: boolean; account?: Account | null; onUpdateAccount?: (u: Account) => void | Promise<void> }) {
   const [name, setName] = useState(account?.name || (admin ? 'Admin Tumbuh Ceria' : ''))
   const [email, setEmail] = useState(account?.email || (admin ? 'admin@tumbuhceria.id' : ''))
   const [phone, setPhone] = useState(account?.phone || '')
@@ -988,12 +1058,16 @@ function SettingsPage({ admin, account, onUpdateAccount }: { admin: boolean; acc
   const [showP, setShowP] = useState(false)
   const [showC, setShowC] = useState(false)
   const [notice, setNotice] = useState('')
-  const save = () => {
+  const save = async () => {
     if (password && password.length < 8) { setNotice('Password baru minimal 8 karakter.'); return }
     if (password && password !== confirmation) { setNotice('Konfirmasi password belum sama.'); return }
     if (!name.trim()) { setNotice('Nama tidak boleh kosong.'); return }
-    if (account && onUpdateAccount) onUpdateAccount({ ...account, name: name.trim(), email: email.trim(), phone: phone.trim(), ...(password ? { password } : {}) })
-    setNotice('Perubahan berhasil disimpan.'); setPassword(''); setConfirmation(''); setTimeout(() => setNotice(''), 3000)
+    try {
+      if (account && onUpdateAccount) await onUpdateAccount({ ...account, name: name.trim(), email: email.trim(), phone: phone.trim(), ...(password ? { password } : {}) })
+      setNotice('Perubahan berhasil disimpan.'); setPassword(''); setConfirmation(''); setTimeout(() => setNotice(''), 3000)
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Gagal menyimpan perubahan.')
+    }
   }
   return (
     <div className="page-content">
@@ -1053,14 +1127,21 @@ function SettingsPage({ admin, account, onUpdateAccount }: { admin: boolean; acc
   )
 }
 
-function AppShell({ admin, account, onExit, childrenData, setChildrenData, articles, setArticles, questions, setQuestions, responses, setResponses, accounts, setAccounts, onExport, extConfig, setExtConfig, onUpdateAccount }: { admin: boolean; account: Account | null; onExit: () => void; childrenData: Child[]; setChildrenData: (c: Child[]) => void; articles: Article[]; setArticles: (a: Article[]) => void; questions: Question[]; setQuestions: (q: Question[]) => void; responses: FormResponse[]; setResponses: (r: FormResponse[]) => void; accounts: Account[]; setAccounts: (a: Account[]) => void; onExport?: () => void; extConfig: ExternalFormConfig; setExtConfig: (c: ExternalFormConfig) => void; onUpdateAccount: (u: Account) => void }) {
+function AppShell({ admin, account, onExit, childrenData, setChildrenData, articles, setArticles, questions, setQuestions, responses, setResponses, accounts, setAccounts, onExport, extConfig, setExtConfig, onUpdateAccount }: { admin: boolean; account: Account | null; onExit: () => void; childrenData: Child[]; setChildrenData: (c: Child[]) => void; articles: Article[]; setArticles: (a: Article[]) => void; questions: Question[]; setQuestions: (q: Question[]) => void; responses: FormResponse[]; setResponses: (r: FormResponse[]) => void; accounts: Account[]; setAccounts: (a: Account[]) => void; onExport?: () => void; extConfig: ExternalFormConfig; setExtConfig: (c: ExternalFormConfig) => void; onUpdateAccount: (u: Account) => void | Promise<void> }) {
   const [active, setActive] = useState(admin ? 'admin' : 'dashboard')
   const myChildren = admin ? childrenData : childrenData.filter(c => c.parentId === account?.id)
   const [selected, setSelected] = useState(() => myChildren[0]?.id || '')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   useEffect(() => { if (!admin && !myChildren.find(c => c.id === selected) && myChildren.length > 0) setSelected(myChildren[0].id) }, [myChildren.length, selected, admin])
   const titles: Record<string, string> = { dashboard: 'Ringkasan', 'my-children': 'Anak Saya', pretest: 'Pre-Test', screentime: 'Screen Time', kpsp: 'Tes KPSP', education: 'Konten Edukasi', admin: 'Overview', users: 'Manajemen User', children: 'Data Anak', questions: 'Form Builder', content: 'Kelola Konten', settings: 'Pengaturan', profile: 'Profil Saya' }
-  const delContent = (id: string) => setArticles(articles.filter(a => a.id !== id))
+  const delContent = async (id: string) => {
+    try {
+      await api.deleteContent(id)
+      setArticles(articles.filter(a => a.id !== id))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal menghapus konten.')
+    }
+  }
   const mergeChildren = (updated: Child[]) => { const others = childrenData.filter(c => c.parentId !== account?.id); setChildrenData([...others, ...updated]) }
   let content: React.ReactNode = null
   if (admin) {
@@ -1092,57 +1173,92 @@ function AppShell({ admin, account, onExit, childrenData, setChildrenData, artic
 }
 
 export default function Page() {
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const resetKey = 'tumbuh-ceria-reset-v2'
-      if (!window.localStorage.getItem(resetKey)) {
-        window.localStorage.removeItem('tumbuh-ceria-children')
-        window.localStorage.removeItem('tumbuh-ceria-accounts')
-        window.localStorage.removeItem('tumbuh-ceria-responses')
-        window.sessionStorage.clear()
-        window.localStorage.setItem(resetKey, 'true')
-      }
-    } catch {}
-  }, [])
-
   const [view, setView] = useState<'public' | 'login' | 'admin-login' | 'register' | 'forgot' | 'parent' | 'admin'>('public')
   const [currentAccount, setCurrentAccount] = useState<Account | null>(null)
+  const [children, setChildren] = useState<Child[]>([])
+  const [articles, setArticlesRaw] = useState<Article[]>([])
+  const [responses, setResponses] = useState<FormResponse[]>([])
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [extConfig, setExtConfig] = useState<ExternalFormConfig>(DEFAULT_EXT_CONFIG)
 
-  const ls = (key: string) => { try { const s = window.localStorage.getItem(key); return s ? JSON.parse(s) : null } catch { return null } }
-  const lss = (key: string, val: any) => { try { window.localStorage.setItem(key, JSON.stringify(val)) } catch {} }
+  const applyBootstrap = useCallback((data: Awaited<ReturnType<typeof api.bootstrap>>) => {
+    setCurrentAccount(data.account)
+    setChildren(data.children)
+    setArticlesRaw(data.articles)
+    setResponses(data.responses)
+    setQuestions(data.questions)
+    setAccounts(data.accounts)
+    setExtConfig(data.extConfig)
+  }, [])
 
-  const [children, setChildrenRaw] = useState<Child[]>(() => { if (typeof window === 'undefined') return []; const d = ls('tumbuh-ceria-children'); return Array.isArray(d) ? d : [] })
-  const setChildren = useCallback((c: Child[]) => { setChildrenRaw(c); lss('tumbuh-ceria-children', c) }, [])
+  const setArticles = useCallback((next: Article[]) => {
+    setArticlesRaw(prev => {
+      next.forEach(a => {
+        const old = prev.find(x => x.id === a.id)
+        if (a.seen && old && !old.seen) {
+          api.markContentSeen(a.id).catch(() => {})
+        }
+      })
+      return next
+    })
+  }, [])
 
-  const [articles, setArticlesRaw] = useState<Article[]>(() => { if (typeof window === 'undefined') return initialArticles.map(a => ({ ...a, seen: false })); const d = ls('tumbuh-ceria-articles'); return Array.isArray(d) && d.length > 0 ? d : initialArticles.map(a => ({ ...a, seen: false })) })
-  const setArticles = useCallback((a: Article[]) => { setArticlesRaw(a); lss('tumbuh-ceria-articles', a) }, [])
+  useEffect(() => {
+    let active = true
+    api.me()
+      .then(async ({ account }) => {
+        if (!active || !account) return
+        const data = await api.bootstrap()
+        if (!active) return
+        applyBootstrap(data)
+        setView(account.role === 'admin' ? 'admin' : 'parent')
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [applyBootstrap])
 
-  const [responses, setResponsesRaw] = useState<FormResponse[]>(() => { if (typeof window === 'undefined') return []; const d = ls('tumbuh-ceria-responses'); return Array.isArray(d) ? d : [] })
-  const setResponses = useCallback((r: FormResponse[]) => { setResponsesRaw(r); lss('tumbuh-ceria-responses', r) }, [])
+  const handleUpdateAccount = useCallback(async (updated: Account) => {
+    const { account } = await api.updateProfile({
+      name: updated.name,
+      email: updated.email,
+      phone: updated.phone,
+      password: updated.password,
+    })
+    setCurrentAccount(account)
+    setAccounts(current => current.map(a => a.id === account.id ? account : a))
+  }, [])
 
-  const [questions, setQuestionsRaw] = useState<Question[]>(() => { if (typeof window === 'undefined') return initialQuestions.map(normalizeQuestion); const d = ls('tumbuh-ceria-questions'); return Array.isArray(d) && d.length > 0 ? d.map((x: any, i: number) => normalizeQuestion(x, i)) : initialQuestions.map(normalizeQuestion) })
-  const setQuestions = useCallback((q: Question[]) => { setQuestionsRaw(q); lss('tumbuh-ceria-questions', q) }, [])
+  const handleDone = useCallback(async (role: Role, account: Account) => {
+    setCurrentAccount(account)
+    const data = await api.bootstrap()
+    applyBootstrap(data)
+    setView(role === 'admin' ? 'admin' : 'parent')
+  }, [applyBootstrap])
 
-  const [accounts, setAccountsRaw] = useState<Account[]>(() => { if (typeof window === 'undefined') return []; const d = ls('tumbuh-ceria-accounts'); return Array.isArray(d) ? d : [] })
-  const setAccounts = useCallback((a: Account[]) => { setAccountsRaw(a); lss('tumbuh-ceria-accounts', a) }, [])
-
-  const [extConfig, setExtConfigRaw] = useState<ExternalFormConfig>(() => { if (typeof window === 'undefined') return DEFAULT_EXT_CONFIG; const d = ls('tumbuh-ceria-ext-forms'); return d?.kpsp && d?.screentime ? d : DEFAULT_EXT_CONFIG })
-  const setExtConfig = useCallback((c: ExternalFormConfig) => { setExtConfigRaw(c); lss('tumbuh-ceria-ext-forms', c) }, [])
-
-  const handleUpdateAccount = useCallback((updated: Account) => { setCurrentAccount(updated); setAccounts(accounts.map(a => a.id === updated.id ? updated : a)) }, [accounts, setAccounts])
+  const handleExit = useCallback(async () => {
+    try { await api.logout() } catch {}
+    setCurrentAccount(null)
+    setChildren([])
+    setArticlesRaw([])
+    setResponses([])
+    setQuestions([])
+    setAccounts([])
+    setExtConfig(DEFAULT_EXT_CONFIG)
+    setView('public')
+  }, [])
 
   if (view === 'public') return <PublicHome onLogin={() => setView('login')} onRegister={() => setView('register')} onAdmin={() => setView('admin-login')} />
 
   if (['login', 'admin-login', 'register', 'forgot'].includes(view)) return <RoleAuthPage
     mode={view === 'admin-login' ? 'admin-login' : view === 'register' ? 'register' : view === 'forgot' ? 'forgot' : 'parent-login'}
     accounts={accounts}
-    onDone={(role: Role, account: Account) => { setCurrentAccount(account); setView(role === 'admin' ? 'admin' : 'parent') }}
-    onRegisterAccount={(account: Account) => { setAccounts([...accounts, account]); setCurrentAccount(account) }}
+    onDone={handleDone}
+    onRegisterAccount={(account: Account) => { setAccounts([...accounts, account]) }}
     onForgot={() => setView('forgot')}
     onRegister={() => setView('register')}
     onBack={() => setView(view === 'register' || view === 'forgot' ? 'login' : 'public')}
   />
 
-  return <AppShell admin={currentAccount?.role === 'admin'} account={currentAccount} onExit={() => { setCurrentAccount(null); setView('public') }} childrenData={children} setChildrenData={setChildren} articles={articles} setArticles={setArticles} questions={questions} setQuestions={setQuestions} responses={responses} setResponses={setResponses} accounts={accounts} setAccounts={setAccounts} onExport={() => exportRealData(accounts, children, responses, questions)} extConfig={extConfig} setExtConfig={setExtConfig} onUpdateAccount={handleUpdateAccount} />
+  return <AppShell admin={currentAccount?.role === 'admin'} account={currentAccount} onExit={handleExit} childrenData={children} setChildrenData={setChildren} articles={articles} setArticles={setArticles} questions={questions} setQuestions={setQuestions} responses={responses} setResponses={setResponses} accounts={accounts} setAccounts={setAccounts} onExport={() => exportRealData(accounts, children, responses, questions)} extConfig={extConfig} setExtConfig={setExtConfig} onUpdateAccount={handleUpdateAccount} />
 }

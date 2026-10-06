@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Akun orang tua dan admin/petugas. Identifier login disimpan di `email`
+/// (email untuk orang tua, username untuk admin — sesuai UI existing).
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String
+  name         String
+  phone        String   @default("")
+  status       String   @default("active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  children          Child[]
+  submissions       PretestSubmission[]
+  contentViews      ContentView[]
+  authoredContent   EducationContent[]
+  authoredQuestions PretestQuestion[]
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Child {
+  id        String   @id @default(uuid()) @db.Uuid
+  parentId  String   @map("parent_id") @db.Uuid
+  parent    User     @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  name      String
+  birth     String   @default("")
+  gender    String
+  status    String   @default("Belum dipantau")
+  initials  String   @default("")
+  color     String   @default("mint")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  submissions PretestSubmission[]
+
+  @@index([parentId])
+  @@map("children")
+}
+
+model PretestQuestion {
+  id           String   @id @default(uuid()) @db.Uuid
+  questionText String   @map("question_text")
+  category     String   @default("Pre-Test")
+  questionType String   @map("question_type")
+  optionsJson  String   @default("[]") @map("options_json")
+  required     Boolean  @default(true)
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(1) @map("sort_order")
+  description  String?
+  createdById  String?  @map("created_by_id") @db.Uuid
+  createdBy    User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([category, active])
+  @@index([sortOrder])
+  @@map("pretest_questions")
+}
+
+/// Satu anak hanya boleh mengerjakan Pre-Test satu kali (aturan UI existing).
+model PretestSubmission {
+  id          String   @id @default(uuid()) @db.Uuid
+  formName    String   @default("Pre-Test") @map("form_name")
+  childId     String   @map("child_id") @db.Uuid
+  child       Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  accountId   String   @map("account_id") @db.Uuid
+  account     User     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date        String
+  startedAt   DateTime @default(now()) @map("started_at")
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  answersJson String   @default("{}") @map("answers_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  answers PretestAnswer[]
+
+  @@unique([childId, formName])
+  @@index([accountId])
+  @@index([formName])
+  @@map("pretest_submissions")
+}
+
+model PretestAnswer {
+  id           String            @id @default(uuid()) @db.Uuid
+  submissionId String            @map("submission_id") @db.Uuid
+  submission   PretestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId   String            @map("question_id")
+  value        String
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  @@unique([submissionId, questionId])
+  @@index([questionId])
+  @@map("pretest_answers")
+}
+
+model EducationContent {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  category    String
+  timeLabel   String   @default("") @map("time_label")
+  color       String   @default("mint")
+  description String   @default("")
+  mediaType   String?  @map("media_type")
+  status      String   @default("active")
+  fileUrl     String?  @map("file_url")
+  authorId    String?  @map("author_id") @db.Uuid
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  views ContentView[]
+
+  @@index([status])
+  @@index([category])
+  @@map("education_contents")
+}
+
+model ContentView {
+  userId    String           @map("user_id") @db.Uuid
+  contentId String           @map("content_id") @db.Uuid
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   EducationContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  seenAt    DateTime         @default(now()) @map("seen_at")
+
+  @@id([userId, contentId])
+  @@map("content_views")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  @@map("app_settings")
+}
