@@ -4,8 +4,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (init?.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const res = await fetch(path, { credentials: 'include', ...init, headers })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as { error?: string }).error || 'Permintaan gagal')
+  const raw = await res.text()
+  let data: unknown = {}
+  if (raw) {
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      data = { error: raw.slice(0, 300) }
+    }
+  }
+  if (!res.ok) {
+    const message =
+      (data as { error?: string }).error ||
+      (res.status ? `Permintaan gagal (HTTP ${res.status})` : 'Permintaan gagal')
+    throw new Error(message)
+  }
   return data as T
 }
 
