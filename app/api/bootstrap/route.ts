@@ -1,9 +1,11 @@
 import { getSession, jsonError, requireUser } from '@/lib/auth'
 import { loadBootstrap } from '@/lib/bootstrap'
+import { ensureSeeded } from '@/lib/seed'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  await ensureSeeded()
   const session = await getSession()
   const denied = requireUser(session)
   if (denied) return denied

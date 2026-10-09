@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RoleAuthPage, Account } from '../components/role-auth'
 import { api } from '@/lib/api-client'
 import { ArrowDown, ArrowRight, ArrowUp, Baby, BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, ClipboardCheck, Clock3, Download, ExternalLink, Eye, EyeOff, FileQuestion, HeartPulse, HelpCircle, LayoutDashboard, LogIn, Menu, MoreHorizontal, Pencil, Plus, Search, Settings, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
-import * as XLSX from 'xlsx'
 
 type Role = 'parent' | 'admin'
 type Child = { id: string; name: string; birth: string; age: string; gender: string; status: string; initials: string; color: string; pretest: boolean; parentId: string }
@@ -105,7 +104,8 @@ ${a.description || 'Panduan praktis tumbuh kembang anak dari Tumbuh Ceria.'}
   URL.revokeObjectURL(url)
 }
 
-function exportRealData(accounts: Account[], children: Child[], responses: FormResponse[], questions: Question[]) {
+async function exportRealData(accounts: Account[], children: Child[], responses: FormResponse[], questions: Question[]) {
+  const XLSX = await import('xlsx')
   const fmt = (t: string) => t ? t.replace(/\s+/g, ' ').trim() : ''
   const ptQuestions = questions
     .filter(q => q.category === 'Pre-Test' || q.form === 'Pre-Test')
@@ -1206,13 +1206,11 @@ export default function Page() {
 
   useEffect(() => {
     let active = true
-    api.me()
-      .then(async ({ account }) => {
-        if (!active || !account) return
-        const data = await api.bootstrap()
+    api.bootstrap()
+      .then(data => {
         if (!active) return
         applyBootstrap(data)
-        setView(account.role === 'admin' ? 'admin' : 'parent')
+        setView(data.account.role === 'admin' ? 'admin' : 'parent')
       })
       .catch(() => {})
     return () => { active = false }

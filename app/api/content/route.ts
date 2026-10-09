@@ -9,11 +9,13 @@ export async function GET() {
   const session = await getSession()
   const denied = requireUser(session)
   if (denied) return denied
-  const rows = await prisma.educationContent.findMany({
-    where: session!.role === 'admin' ? undefined : { status: 'active' },
-    orderBy: { createdAt: 'desc' },
-  })
-  const views = await prisma.contentView.findMany({ where: { userId: session!.id } })
+  const [rows, views] = await Promise.all([
+    prisma.educationContent.findMany({
+      where: session!.role === 'admin' ? undefined : { status: 'active' },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.contentView.findMany({ where: { userId: session!.id } }),
+  ])
   const seen = new Set(views.map(v => v.contentId))
   return Response.json({ articles: rows.map(a => toArticle(a, seen.has(a.id))) })
 }

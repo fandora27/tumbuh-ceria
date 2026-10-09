@@ -1,7 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { prisma } from './prisma'
-import { ensureSeeded } from './seed'
 
 const COOKIE = 'tc_session'
 
@@ -43,7 +42,6 @@ export async function clearSession() {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
-  await ensureSeeded()
   const store = await cookies()
   const token = store.get(COOKIE)?.value
   if (!token) return null

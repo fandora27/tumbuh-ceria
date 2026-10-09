@@ -9,10 +9,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const denied = requireAdmin(session)
   if (denied) return denied
   const { id } = await context.params
-  const existing = await prisma.pretestQuestion.findUnique({ where: { id } })
+  const [existing, body] = await Promise.all([
+    prisma.pretestQuestion.findUnique({ where: { id } }),
+    request.json().catch(() => ({})),
+  ])
   if (!existing) return jsonError('Pertanyaan tidak ditemukan.', 404)
-
-  const body = await request.json().catch(() => ({}))
   const questionText = body.questionText !== undefined || body.title !== undefined
     ? String(body.questionText || body.title || '').trim()
     : existing.questionText
@@ -53,8 +54,13 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   const denied = requireAdmin(session)
   if (denied) return denied
   const { id } = await context.params
-  const existing = await prisma.pretestQuestion.findUnique({ where: { id } })
-  if (!existing) return jsonError('Pertanyaan tidak ditemukan.', 404)
-  await prisma.pretestQuestion.delete({ where: { id } })
+  try {
+    await prisma.pretestQuestion.delete({ where: { id } })
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
+      return jsonError('Pertanyaan tidak ditemukan.', 404)
+    }
+    throw err
+  }
   return Response.json({ ok: true })
 }

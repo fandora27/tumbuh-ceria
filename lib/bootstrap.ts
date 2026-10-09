@@ -5,8 +5,7 @@ import type { SessionUser } from './auth'
 
 export async function loadBootstrap(session: SessionUser) {
   const isAdmin = session.role === 'admin'
-  const [accountRow, childrenRows, submissions, questions, articles, views, accounts, extSetting] = await Promise.all([
-    prisma.user.findUnique({ where: { id: session.id } }),
+  const [childrenRows, submissions, questions, articles, views, accounts, extSetting] = await Promise.all([
     prisma.child.findMany({
       where: isAdmin ? undefined : { parentId: session.id },
       orderBy: { createdAt: 'asc' },
@@ -24,13 +23,11 @@ export async function loadBootstrap(session: SessionUser) {
     prisma.appSetting.findUnique({ where: { key: 'external_forms' } }),
   ])
 
-  if (!accountRow) throw new Error('Akun tidak ditemukan')
-
   const pretestChildIds = new Set(submissions.filter(s => s.formName === 'Pre-Test').map(s => s.childId))
   const seenIds = new Set(views.map(v => v.contentId))
 
   return {
-    account: toAccount(accountRow),
+    account: toAccount(session),
     children: childrenRows.map(c => toChild(c, pretestChildIds.has(c.id))),
     articles: articles.map(a => toArticle(a, seenIds.has(a.id))),
     questions: questions.map(toQuestion),

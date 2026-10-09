@@ -21,10 +21,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const denied = requireUser(session)
   if (denied) return denied
   const { id } = await context.params
-  const found = await loadOwnedChild(session!.id, session!.role, id)
+  const [found, body] = await Promise.all([
+    loadOwnedChild(session!.id, session!.role, id),
+    request.json().catch(() => ({})),
+  ])
   if (found.error || !found.child) return found.error
-
-  const body = await request.json().catch(() => ({}))
   const name = String(body.name || found.child.name).trim()
   const birth = body.birth !== undefined ? String(body.birth || '') : found.child.birth
   const gender = String(body.gender || found.child.gender)
@@ -43,8 +44,12 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   const denied = requireUser(session)
   if (denied) return denied
   const { id } = await context.params
+  const { count } = await prisma.child.deleteMany({
+    where: { id, ...(session!.role !== 'admin' ? { parentId: session!.id } : {}) },
+  })
+  if (count > 0) return Response.json({ ok: true })
+  // Jalur error jarang terjadi (tidak ditemukan / bukan milik user) — pertahankan respons lama persis
   const found = await loadOwnedChild(session!.id, session!.role, id)
-  if (found.error || !found.child) return found.error
-  await prisma.child.delete({ where: { id } })
+  if (found.error) return found.error
   return Response.json({ ok: true })
 }
