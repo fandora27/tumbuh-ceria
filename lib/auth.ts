@@ -41,7 +41,11 @@ export async function clearSession() {
   store.delete(COOKIE)
 }
 
-export async function getSession(): Promise<SessionUser | null> {
+export type SessionClaims = { id: string; role: 'parent' | 'admin' }
+
+// Hanya decode token (tanpa query DB) — dipakai bootstrap agar verifikasi user
+// berjalan paralel dengan query data.
+export async function getSessionClaims(): Promise<SessionClaims | null> {
   const store = await cookies()
   const token = store.get(COOKIE)?.value
   if (!token) return null
@@ -49,7 +53,17 @@ export async function getSession(): Promise<SessionUser | null> {
     const { payload } = await jwtVerify(token, secret())
     const id = String(payload.sub || '')
     if (!id) return null
-    const user = await prisma.user.findUnique({ where: { id } })
+    return { id, role: payload.role === 'admin' ? 'admin' : 'parent' }
+  } catch {
+    return null
+  }
+}
+
+export async function getSession(): Promise<SessionUser | null> {
+  const claims = await getSessionClaims()
+  if (!claims) return null
+  try {
+    const user = await prisma.user.findUnique({ where: { id: claims.id } })
     if (!user || user.status !== 'active') return null
     return {
       id: user.id,

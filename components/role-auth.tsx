@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { Check, Eye, EyeOff, HeartPulse, Sparkles } from 'lucide-react'
+import { Check, Eye, EyeOff, HeartPulse, Loader2, Sparkles } from 'lucide-react'
 import { api } from '@/lib/api-client'
 import type { Account, Role } from '@/lib/types'
 
@@ -18,6 +18,7 @@ function PasswordInput({ name, label, placeholder, value, onChange }: { name: st
 
 export function RoleAuthPage({ mode, accounts, onDone, onBack, onRegisterAccount, onForgot, onRegister }: { mode: Mode; accounts: Account[]; onDone: (role: Role, account: Account) => void | Promise<void>; onBack: () => void; onRegisterAccount: (account: Account) => void; onForgot?: () => void; onRegister?: () => void }) {
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -26,7 +27,9 @@ export function RoleAuthPage({ mode, accounts, onDone, onBack, onRegisterAccount
   const isAdmin = mode === 'admin-login'
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busy) return
     setError('')
+    setBusy(true)
     const data = new FormData(event.currentTarget)
     const identifier = String(data.get(isAdmin ? 'username' : 'email') || '').trim()
     try {
@@ -50,11 +53,13 @@ export function RoleAuthPage({ mode, accounts, onDone, onBack, onRegisterAccount
       await onDone(account.role, account)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Terjadi kesalahan.')
+    } finally {
+      setBusy(false)
     }
   }
-  return <main className="auth-page"><div className="auth-side"><button className="back-home" onClick={onBack}>← Kembali</button><Logo /><div className="auth-quote"><Sparkles size={23} /><h2>Setiap anak tumbuh dengan caranya sendiri.</h2><p>Aman, privat, dan dibuat untuk keluarga Indonesia.</p></div></div><div className="auth-panel"><div className="auth-form"><Logo /><div className="auth-title"><h1>{isAdmin ? 'Login Admin' : isRegister ? 'Mulai perjalanan tumbuh' : isForgot ? 'Pulihkan akses akun' : 'Selamat datang kembali'}</h1><p>{isAdmin ? 'Masuk ke panel administrasi Tumbuh Ceria.' : isRegister ? 'Buat akun orang tua gratis.' : isForgot ? 'Masukkan email untuk memulai pemulihan.' : 'Masuk ke ruang tumbuh keluarga Anda.'}</p></div>{error && <div className="error-box">{error}</div>}{sent ? <div className="success-box"><div className="success-icon"><Check /></div><h2>{isForgot ? 'Email terkirim' : 'Akun berhasil dibuat'}</h2><p>{isForgot ? 'Instruksi pemulihan sudah dikirim.' : 'Silakan lanjutkan ke halaman login orang tua.'}</p><Button onClick={onBack}>Lanjutkan</Button></div> : <form onSubmit={submit}>{isRegister && <><label>Nama Lengkap<input name="name" placeholder="Contoh: Anisa Putri" required /></label><label>Nomor WhatsApp<input name="phone" placeholder="08xx xxxx xxxx" required /></label></>}{!isForgot && <>{isAdmin ? <label>Username<input name="username" placeholder="Username" autoComplete="username" required /></label> : <label>Email<input name="email" type="email" placeholder={isRegister ? 'nama@email.com' : 'Email orang tua'} autoComplete="email" required /></label>}<PasswordInput name="password" label="Password" placeholder="Minimal 8 karakter" value={password} onChange={setPassword} />{isRegister && <PasswordInput name="confirmation" label="Konfirmasi Password" placeholder="Masukkan kembali password" value={confirmation} onChange={setConfirmation} />}</>}{isForgot && <label>Email<input name="email" type="email" placeholder="nama@email.com" required /></label>}{mode === 'parent-login' && <div className="form-inline"><label className="check-label"><input type="checkbox" name="remember" /> Ingat saya</label><button type="button" className="text-button" onClick={onForgot || onBack}>Lupa password?</button></div>}<Button type="submit">{isAdmin ? 'Masuk sebagai Admin' : isRegister ? 'Buat akun orang tua' : isForgot ? 'Kirim instruksi pemulihan' : 'Masuk'}</Button>{mode === 'parent-login' && <button type="button" className="text-button auth-link" onClick={onRegister || onBack}>Belum punya akun? Daftar sebagai Orang Tua</button>}</form>}</div></div></main>
+  return <main className="auth-page"><div className="auth-side"><button className="back-home" onClick={onBack}>← Kembali</button><Logo /><div className="auth-quote"><Sparkles size={23} /><h2>Setiap anak tumbuh dengan caranya sendiri.</h2><p>Aman, privat, dan dibuat untuk keluarga Indonesia.</p></div></div><div className="auth-panel"><div className="auth-form"><Logo /><div className="auth-title"><h1>{isAdmin ? 'Login Admin' : isRegister ? 'Mulai perjalanan tumbuh' : isForgot ? 'Pulihkan akses akun' : 'Selamat datang kembali'}</h1><p>{isAdmin ? 'Masuk ke panel administrasi Tumbuh Ceria.' : isRegister ? 'Buat akun orang tua gratis.' : isForgot ? 'Masukkan email untuk memulai pemulihan.' : 'Masuk ke ruang tumbuh keluarga Anda.'}</p></div>{error && <div className="error-box">{error}</div>}{sent ? <div className="success-box"><div className="success-icon"><Check /></div><h2>{isForgot ? 'Email terkirim' : 'Akun berhasil dibuat'}</h2><p>{isForgot ? 'Instruksi pemulihan sudah dikirim.' : 'Silakan lanjutkan ke halaman login orang tua.'}</p><Button onClick={onBack}>Lanjutkan</Button></div> : <form onSubmit={submit}>{isRegister && <><label>Nama Lengkap<input name="name" placeholder="Contoh: Anisa Putri" required /></label><label>Nomor WhatsApp<input name="phone" placeholder="08xx xxxx xxxx" required /></label></>}{!isForgot && <>{isAdmin ? <label>Username<input name="username" placeholder="Username" autoComplete="username" required /></label> : <label>Email<input name="email" type="email" placeholder={isRegister ? 'nama@email.com' : 'Email orang tua'} autoComplete="email" required /></label>}<PasswordInput name="password" label="Password" placeholder="Minimal 8 karakter" value={password} onChange={setPassword} />{isRegister && <PasswordInput name="confirmation" label="Konfirmasi Password" placeholder="Masukkan kembali password" value={confirmation} onChange={setConfirmation} />}</>}{isForgot && <label>Email<input name="email" type="email" placeholder="nama@email.com" required /></label>}{mode === 'parent-login' && <div className="form-inline"><label className="check-label"><input type="checkbox" name="remember" /> Ingat saya</label><button type="button" className="text-button" onClick={onForgot || onBack}>Lupa password?</button></div>}<Button type="submit" disabled={busy}>{busy ? <><Loader2 size={14} className="tc-spin" /> {isRegister ? 'Memproses…' : isForgot ? 'Mengirim…' : 'Memproses login…'}</> : isAdmin ? 'Masuk sebagai Admin' : isRegister ? 'Buat akun orang tua' : isForgot ? 'Kirim instruksi pemulihan' : 'Masuk'}</Button>{mode === 'parent-login' && <button type="button" className="text-button auth-link" onClick={onRegister || onBack}>Belum punya akun? Daftar sebagai Orang Tua</button>}</form>}</div></div></main>
 }
 
-function Button({ children, onClick, type = 'button' }: { children: React.ReactNode; onClick?: () => void; type?: 'button' | 'submit' }) { return <button type={type} className="btn btn-primary" onClick={onClick}>{children}</button> }
+function Button({ children, onClick, type = 'button', disabled }: { children: React.ReactNode; onClick?: () => void; type?: 'button' | 'submit'; disabled?: boolean }) { return <button type={type} className="btn btn-primary" onClick={onClick} disabled={disabled}>{children}</button> }
 
 export type { Account, Mode, Role }

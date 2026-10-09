@@ -1,9 +1,8 @@
 import { prisma } from './prisma'
 import { parseExtConfig, toAccount, toArticle, toChild, toQuestion, toResponse } from './mappers'
 import { DEFAULT_EXT_CONFIG } from './types'
-import type { SessionUser } from './auth'
 
-export async function loadBootstrap(session: SessionUser) {
+export async function loadBootstrap(session: { id: string; role: 'parent' | 'admin' }) {
   const isAdmin = session.role === 'admin'
   const [childrenRows, submissions, questions, articles, views, accounts, extSetting] = await Promise.all([
     prisma.child.findMany({
@@ -27,7 +26,6 @@ export async function loadBootstrap(session: SessionUser) {
   const seenIds = new Set(views.map(v => v.contentId))
 
   return {
-    account: toAccount(session),
     children: childrenRows.map(c => toChild(c, pretestChildIds.has(c.id))),
     articles: articles.map(a => toArticle(a, seenIds.has(a.id))),
     questions: questions.map(toQuestion),

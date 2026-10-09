@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RoleAuthPage, Account } from '../components/role-auth'
 import { api } from '@/lib/api-client'
-import { ArrowDown, ArrowRight, ArrowUp, Baby, BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, ClipboardCheck, Clock3, Download, ExternalLink, Eye, EyeOff, FileQuestion, HeartPulse, HelpCircle, LayoutDashboard, LogIn, Menu, MoreHorizontal, Pencil, Plus, Search, Settings, ShieldCheck, Sparkles, Trash2, UserRound, Users, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, Baby, BookOpen, CalendarDays, Check, ChevronDown, ChevronRight, ClipboardCheck, Clock3, Download, ExternalLink, Eye, EyeOff, FileQuestion, HeartPulse, HelpCircle, LayoutDashboard, LogIn, Menu, MoreHorizontal, Pencil, Plus, Search, Settings, ShieldCheck, Sparkles, Trash2, UserRound, Users, X, Loader2 } from 'lucide-react'
 
 type Role = 'parent' | 'admin'
 type Child = { id: string; name: string; birth: string; age: string; gender: string; status: string; initials: string; color: string; pretest: boolean; parentId: string }
@@ -353,9 +353,12 @@ function ChildPage({ selected, setSelected, childrenData, setChildrenData, accou
   const [name, setName] = useState('')
   const [birth, setBirth] = useState('')
   const [gender, setGender] = useState('Perempuan')
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const colors = ['mint', 'peach', 'lavender', 'blue']
   const save = async () => {
-    if (!name.trim()) return
+    if (!name.trim() || saving) return
+    setSaving(true)
     try {
       if (editing) {
         const { child } = await api.updateChild(editing.id, { name, birth: birth || editing.birth, gender })
@@ -367,10 +370,14 @@ function ChildPage({ selected, setSelected, childrenData, setChildrenData, accou
       setName(''); setBirth(''); setGender('Perempuan'); setEditing(null); setShowForm(false)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Gagal menyimpan data anak.')
+    } finally {
+      setSaving(false)
     }
   }
   const deleteChild = async (id: string, nm: string) => {
+    if (deleting) return
     if (confirm(`Hapus anak "${nm}"? Tidak dapat dibatalkan.`)) {
+      setDeleting(true)
       try {
         await api.deleteChild(id)
         setChildrenData(childrenData.filter(c => c.id !== id))
@@ -379,6 +386,8 @@ function ChildPage({ selected, setSelected, childrenData, setChildrenData, accou
         setMenu(null)
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Gagal menghapus data anak.')
+      } finally {
+        setDeleting(false)
       }
     }
   }
@@ -421,7 +430,7 @@ function ChildPage({ selected, setSelected, childrenData, setChildrenData, accou
           </div>
           <div className="form-actions">
             <Button variant="ghost" onClick={() => setShowForm(false)}>Batal</Button>
-            <Button onClick={save}>Simpan profil</Button>
+            <Button onClick={save} disabled={saving}>{saving ? <><Loader2 size={14} className="tc-spin" /> Menyimpan…</> : 'Simpan profil'}</Button>
           </div>
         </div>
       )}
@@ -441,7 +450,7 @@ function ChildPage({ selected, setSelected, childrenData, setChildrenData, accou
                   <div className="action-menu">
                     <button onClick={() => { setSelected(child.id); setMenu(null) }}>Pilih anak</button>
                     <button onClick={() => { setEditing(child); setName(child.name); setBirth(child.birth); setGender(child.gender); setShowForm(true); setMenu(null) }}>Edit data anak</button>
-                    <button style={{ color: '#c05746' }} onClick={() => deleteChild(child.id, child.name)}>Hapus anak</button>
+                    <button style={{ color: '#c05746' }} onClick={() => deleteChild(child.id, child.name)} disabled={deleting}>Hapus anak</button>
                   </div>
                 )}
               </div>
@@ -478,10 +487,12 @@ function PretestForm({ selected, setActive, childrenData, setChildrenData, quest
     const next = cur.includes(opt) ? cur.filter(o => o !== opt) : [...cur, opt]
     setAnswers(p => ({ ...p, [qId]: next.join(', ') })); setError('')
   }
+  const [submitting, setSubmitting] = useState(false)
   const submit = async () => {
     const miss = activeQs.find(q => q.required && !(answers[q.questionId || q.id] || '').trim())
     if (miss) { setError(`Pertanyaan wajib belum dijawab: "${miss.questionText || miss.title}"`); return }
-    if (!child) return
+    if (!child || submitting) return
+    setSubmitting(true)
     try {
       const result = await api.submitPretest({ childId: child.id, answers })
       setResponses([...responses, result.response])
@@ -489,6 +500,8 @@ function PretestForm({ selected, setActive, childrenData, setChildrenData, quest
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menyimpan jawaban.')
+    } finally {
+      setSubmitting(false)
     }
   }
   if (saved) return <div className="page-content centered-state"><div className="success-icon large"><Check size={36} /></div><span className="section-kicker">Data Tersimpan</span><h2>Pre-Test berhasil disimpan.</h2><p>Jawaban untuk <b>{child?.name}</b> tersimpan aman.</p><Button onClick={() => setActive('dashboard')}>Kembali ke Dashboard</Button></div>
@@ -518,7 +531,7 @@ function PretestForm({ selected, setActive, childrenData, setChildrenData, quest
         </div>}
       <div className="form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
         <Button variant="ghost" onClick={() => setActive('dashboard')}>Batal &amp; Kembali</Button>
-        <Button onClick={submit} disabled={!activeQs.length}>Simpan Jawaban <ArrowRight size={16} /></Button>
+        <Button onClick={submit} disabled={!activeQs.length || submitting}>{submitting ? <><Loader2 size={14} className="tc-spin" /> Menyimpan…</> : <>Simpan Jawaban <ArrowRight size={16} /></>}</Button>
       </div>
     </div>
   )
@@ -673,6 +686,7 @@ function AdminDashboard({ setActive, onExport, articles, setArticles, accounts, 
   const [titleInput, setTitleInput] = useState('')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [editK, setEditK] = useState(false)
   const [editSt, setEditSt] = useState(false)
   const [kDraft, setKDraft] = useState(extConfig.kpsp)
@@ -692,7 +706,8 @@ function AdminDashboard({ setActive, onExport, articles, setArticles, accounts, 
     reader.readAsDataURL(f)
   }
   const publish = async () => {
-    if (!fileData || !desc.trim()) return
+    if (!fileData || !desc.trim() || publishing) return
+    setPublishing(true)
     try {
       const { article } = await api.createContent({ title: titleInput.trim() || fileData.name, category: 'Edukasi', time: 'Baru', color: 'mint', description: desc, type: fileData.type, fileUrl: fileData.data, status: 'active' })
       if (articles && setArticles) setArticles([article, ...articles])
@@ -700,6 +715,8 @@ function AdminDashboard({ setActive, onExport, articles, setArticles, accounts, 
       setTimeout(() => setNotice(''), 3000)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Gagal mempublikasikan konten.')
+    } finally {
+      setPublishing(false)
     }
   }
   const saveK = async () => {
@@ -805,7 +822,7 @@ function AdminDashboard({ setActive, onExport, articles, setArticles, accounts, 
               </div>
             )}
             <label>Deskripsi<textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Tulis deskripsi konten edukasi..." rows={4} style={{ resize: 'vertical' }} /></label>
-            <Button disabled={!fileData || !desc.trim() || loading} onClick={publish} style={{ width: '100%' }}>Publikasikan konten</Button>
+            <Button disabled={!fileData || !desc.trim() || loading || publishing} onClick={publish} style={{ width: '100%' }}>{publishing ? <><Loader2 size={14} className="tc-spin" /> Mempublikasikan…</> : 'Publikasikan konten'}</Button>
           </div>
         </section>
         <section className="panel">
@@ -853,12 +870,15 @@ function QuestionsPage({ questions, setQuestions }: { questions: Question[]; set
     if (nt === 'MULTIPLE_CHOICE' || nt === 'CHECKBOX') { if (!options.length) setOptions(['Opsi 1', 'Opsi 2']) }
     else if (nt === 'YES_NO') setOptions(['Ya', 'Tidak'])
   }
+  const [savingQ, setSavingQ] = useState(false)
   const handleSave = async () => {
     if (!qText.trim()) { setNotice('Teks pertanyaan wajib diisi.'); return }
     let finalOpts: string[] = []
     if (qType === 'MULTIPLE_CHOICE' || qType === 'CHECKBOX') { finalOpts = options.map(o => o.trim()).filter(Boolean); if (!finalOpts.length) { setNotice('Harus ada minimal 1 opsi.'); return } }
     else if (qType === 'YES_NO') finalOpts = ['Ya', 'Tidak']
     const fq: Question = { questionId: qId, questionText: qText.trim(), category: 'Pre-Test', questionType: qType, options: finalOpts, required, active, order: Number(order) || 1, id: qId, title: qText.trim(), form: 'Pre-Test', type: qType, status: active ? 'active' : 'inactive' }
+    if (savingQ) return
+    setSavingQ(true)
     try {
       if (isNew) {
         const { question } = await api.saveQuestion(fq)
@@ -870,6 +890,8 @@ function QuestionsPage({ questions, setQuestions }: { questions: Question[]; set
       setEditing(null); setNotice('Pertanyaan berhasil disimpan.'); setTimeout(() => setNotice(''), 3000)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Gagal menyimpan pertanyaan.')
+    } finally {
+      setSavingQ(false)
     }
   }
   return (
@@ -890,7 +912,7 @@ function QuestionsPage({ questions, setQuestions }: { questions: Question[]; set
           <label className="check-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}><input type="checkbox" checked={required} onChange={e => setRequired(e.target.checked)} /><span>Wajib diisi</span></label>
           <label className="check-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}><input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} /><span>Status Aktif</span></label>
         </div>
-        <div className="form-actions"><Button variant="ghost" onClick={() => setEditing(null)}>Batal</Button><Button onClick={handleSave}>Simpan Pertanyaan</Button></div>
+        <div className="form-actions"><Button variant="ghost" onClick={() => setEditing(null)}>Batal</Button><Button onClick={handleSave} disabled={savingQ}>{savingQ ? <><Loader2 size={14} className="tc-spin" /> Menyimpan…</> : 'Simpan Pertanyaan'}</Button></div>
       </div>}
       {notice && <div style={{ padding: '14px', margin: '0 0 16px', borderRadius: '10px', background: '#e5f5eb', color: '#287454', fontWeight: 600 }}>{notice}</div>}
       <div className="question-admin-list panel">
@@ -934,6 +956,7 @@ function DataTable({ kind, onExport, accounts, setAccounts, childrenData, setChi
   const [resetUser, setResetUser] = useState<string | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [message, setMessage] = useState('')
+  const [delBusy, setDelBusy] = useState(false)
   const parents = (accounts || []).filter(a => a.role === 'parent')
   const children = childrenData || []
   const delParent = async (id: string, nm: string) => {
@@ -949,13 +972,17 @@ function DataTable({ kind, onExport, accounts, setAccounts, childrenData, setChi
     }
   }
   const delChild = async (id: string, nm: string) => {
+    if (delBusy) return
     if (!confirm(`Hapus anak "${nm}"?`)) return
+    setDelBusy(true)
     try {
       await api.deleteChild(id)
       if (setChildrenData) setChildrenData(children.filter(c => c.id !== id))
       if (setResponses && responses) setResponses(responses.filter(r => r.childId !== id))
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Gagal menghapus anak.')
+    } finally {
+      setDelBusy(false)
     }
   }
   const rows = kind === 'users'
@@ -1058,15 +1085,20 @@ function SettingsPage({ admin, account, onUpdateAccount }: { admin: boolean; acc
   const [showP, setShowP] = useState(false)
   const [showC, setShowC] = useState(false)
   const [notice, setNotice] = useState('')
+  const [savingAcc, setSavingAcc] = useState(false)
   const save = async () => {
     if (password && password.length < 8) { setNotice('Password baru minimal 8 karakter.'); return }
     if (password && password !== confirmation) { setNotice('Konfirmasi password belum sama.'); return }
     if (!name.trim()) { setNotice('Nama tidak boleh kosong.'); return }
+    if (savingAcc) return
+    setSavingAcc(true)
     try {
       if (account && onUpdateAccount) await onUpdateAccount({ ...account, name: name.trim(), email: email.trim(), phone: phone.trim(), ...(password ? { password } : {}) })
       setNotice('Perubahan berhasil disimpan.'); setPassword(''); setConfirmation(''); setTimeout(() => setNotice(''), 3000)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Gagal menyimpan perubahan.')
+    } finally {
+      setSavingAcc(false)
     }
   }
   return (
@@ -1120,7 +1152,7 @@ function SettingsPage({ admin, account, onUpdateAccount }: { admin: boolean; acc
           </div>
         )}
         <div>
-          <Button onClick={save}>Simpan Perubahan</Button>
+          <Button onClick={save} disabled={savingAcc}>{savingAcc ? <><Loader2 size={14} className="tc-spin" /> Menyimpan…</> : 'Simpan Perubahan'}</Button>
         </div>
       </div>
     </div>
@@ -1181,6 +1213,7 @@ export default function Page() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [extConfig, setExtConfig] = useState<ExternalFormConfig>(DEFAULT_EXT_CONFIG)
+  const [booting, setBooting] = useState(true)
 
   const applyBootstrap = useCallback((data: Awaited<ReturnType<typeof api.bootstrap>>) => {
     setCurrentAccount(data.account)
@@ -1213,6 +1246,7 @@ export default function Page() {
         setView(data.account.role === 'admin' ? 'admin' : 'parent')
       })
       .catch(() => {})
+      .finally(() => { if (active) setBooting(false) })
     return () => { active = false }
   }, [applyBootstrap])
 
@@ -1245,6 +1279,8 @@ export default function Page() {
     setExtConfig(DEFAULT_EXT_CONFIG)
     setView('public')
   }, [])
+
+  if (booting) return <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', gap: '10px' }}><Loader2 size={22} className="tc-spin" style={{ color: 'var(--green)' }} /><p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Memuat data…</p></div>
 
   if (view === 'public') return <PublicHome onLogin={() => setView('login')} onRegister={() => setView('register')} onAdmin={() => setView('admin-login')} />
 
