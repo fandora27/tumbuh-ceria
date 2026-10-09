@@ -1280,6 +1280,51 @@ export default function Page() {
     setView('public')
   }, [])
 
+  // Sinkronkan sesi dengan view yang tampil: deteksi cookie yang berganti/hilang
+  // (login di tab lain, bfcache, kedaluwarsa) sebelum user menjalani error 403/401.
+  const revalidateSession = useCallback(() => {
+    if (booting) return
+    if (view !== 'admin' && view !== 'parent') return
+    api.me().then(({ account }) => {
+      if (!account) {
+        setCurrentAccount(null)
+        setChildren([])
+        setArticlesRaw([])
+        setResponses([])
+        setQuestions([])
+        setAccounts([])
+        setExtConfig(DEFAULT_EXT_CONFIG)
+        setView('public')
+        return
+      }
+      if (currentAccount && account.id === currentAccount.id && account.role === currentAccount.role) return
+      return api.bootstrap().then(data => {
+        applyBootstrap(data)
+        setView(data.account.role === 'admin' ? 'admin' : 'parent')
+      })
+    }).catch(() => {})
+  }, [booting, view, currentAccount, applyBootstrap])
+
+  useEffect(() => {
+    let last = 0
+    const run = () => {
+      const now = Date.now()
+      if (now - last < 4000) return
+      last = now
+      revalidateSession()
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') run() }
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) run() }
+    window.addEventListener('focus', run)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      window.removeEventListener('focus', run)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onPageShow)
+    }
+  }, [revalidateSession])
+
   if (booting) return <div style={{ minHeight: '70vh', display: 'grid', placeItems: 'center', gap: '10px' }}><Loader2 size={22} className="tc-spin" style={{ color: 'var(--green)' }} /><p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Memuat data…</p></div>
 
   if (view === 'public') return <PublicHome onLogin={() => setView('login')} onRegister={() => setView('register')} onAdmin={() => setView('admin-login')} />
