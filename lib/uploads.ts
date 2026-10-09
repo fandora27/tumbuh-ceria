@@ -20,8 +20,14 @@ export async function saveDataUrlFile(dataUrl: string, prefix: string) {
   const mime = match[1]
   const buf = Buffer.from(match[2], 'base64')
   const dir = path.join(process.cwd(), 'public', 'uploads')
-  await mkdir(dir, { recursive: true })
   const name = `${prefix}-${Date.now()}.${extFromMime(mime)}`
-  await writeFile(path.join(dir, name), buf)
-  return `/uploads/${name}`
+  try {
+    await mkdir(dir, { recursive: true })
+    await writeFile(path.join(dir, name), buf)
+    return `/uploads/${name}`
+  } catch {
+    // Filesystem read-only (mis. Vercel Functions) — simpan data URL apa adanya
+    // agar konten tetap terpublikasi dan tampil (<img>/<video src data:...> didukung UI).
+    return dataUrl
+  }
 }
